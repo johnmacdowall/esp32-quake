@@ -80,7 +80,7 @@ CONFIG_ESP_EVENT_POST_FROM_IRAM_ISR=n
 CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM=y
 
 # ---- esp32-quake: RGB panel (Sunton 8048S050) ----
-# The LCD DMA reads the frame buffer straight from PSRAM. When the game saturates
-# PSRAM the DMA falls behind and the picture shifts sideways for good: restarting
-# the DMA in every vertical blank limits a slip to a single frame.
-CONFIG_LCD_RGB_RESTART_IN_VSYNC=y
+# Bounce buffer mode (esp_display_rgb.c): the driver detects missed refills and
+# restarts by itself. Forcing a restart in every vertical blank makes the picture
+# jump vertically, so it stays off.
+# CONFIG_LCD_RGB_RESTART_IN_VSYNC is not set

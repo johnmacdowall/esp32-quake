@@ -63,8 +63,12 @@
 #define OUT_X           ((RGB_PANEL_WIDTH - OUT_WIDTH) / 2)
 #define OUT_Y           ((RGB_PANEL_HEIGHT - OUT_HEIGHT) / 2)
 
+#if CONFIG_LCD_RGB_RESTART_IN_VSYNC
+#error "CONFIG_LCD_RGB_RESTART_IN_VSYNC makes the picture jump vertically in bounce buffer mode. It is off in sdkconfig.defaults: delete the generated sdkconfig.esp32-8048S050 file (next to platformio.ini) and build again."
+#endif
+
 #ifndef RGB_PANEL_BOUNCE_LINES
-#define RGB_PANEL_BOUNCE_LINES  4       // panel lines per bounce buffer (x2 buffers, internal RAM)
+#define RGB_PANEL_BOUNCE_LINES  8       // panel lines per bounce buffer (x2 buffers, internal RAM, 12.8 kB each)
 #endif
 #if (RGB_PANEL_HEIGHT % RGB_PANEL_BOUNCE_LINES) != 0
 #error "RGB_PANEL_BOUNCE_LINES must divide RGB_PANEL_HEIGHT"
