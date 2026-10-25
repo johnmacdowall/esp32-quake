@@ -28,6 +28,14 @@
 #include "services/dis/ble_svc_dis.h"
 #include "services/sps/ble_svc_sps.h"
 
+// esp32-quake: the NimBLE in PlatformIO's ESP-IDF 5.5.3 (framework-espidf 3.50503.0)
+// lacks these two HID *device* callbacks. The game only uses the HID host side, so
+// they become no-ops (the argument is still referenced: no unused-function warning).
+#ifndef ESP32_QUAKE_KEEP_HID_WRITE_CB
+#define ble_svc_hid_register_report_write_cb(cb)   ((void) (cb))
+#define ble_svc_hid_register_char_write_cb(cb)     ((void) (cb))
+#endif
+
 #if CONFIG_BT_NIMBLE_HID_SERVICE
 
 static const char *TAG = "NIMBLE_HIDD";
