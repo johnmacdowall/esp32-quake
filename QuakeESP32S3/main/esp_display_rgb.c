@@ -29,6 +29,11 @@
 #include "esp_cache.h"
 #include "esp_idf_version.h"
 #include "esp_log.h"
+#include "sdkconfig.h"
+
+#if !CONFIG_LCD_RGB_RESTART_IN_VSYNC
+#error "CONFIG_LCD_RGB_RESTART_IN_VSYNC is off: the picture can shift sideways. It is set in sdkconfig.defaults: delete the generated sdkconfig.esp32-8048S050 file (next to platformio.ini) and build again."
+#endif
 
 #if RGB_PANEL_SCALE < 1 || LCD_WIDTH * RGB_PANEL_SCALE > RGB_PANEL_WIDTH || LCD_HEIGHT * RGB_PANEL_SCALE > RGB_PANEL_HEIGHT
 #error "RGB_PANEL_SCALE too large for the panel"
