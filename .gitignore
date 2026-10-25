@@ -1,5 +1,17 @@
+# PlatformIO / ESP-IDF build output
 .pio/
 .vscode/
+build/
+build-*/
+sdkconfig
 sdkconfig.*
 !sdkconfig.defaults
-build/
+!sdkconfig.defaults.*
+
+# Game data: never commit id Software's files
+*.pak
+*.PAK
+msdos_Quake*/
+msdos_Quake*.zip
+id1/
+ID1/
