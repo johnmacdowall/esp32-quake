@@ -13,9 +13,11 @@ CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 # the timing is tuned at boot, and a large temperature change can make it fail. If the
 # game crashes at random once warm, use CONFIG_ESPTOOLPY_FLASHFREQ_80M and
 # CONFIG_SPIRAM_SPEED_80M (and delete sdkconfig / the build directory).
-# esp32-quake (Sunton 8048S050): 80 MHz for the first runs, the speed the bring-up
-# test proved stable with the RGB panel. Try the 120 MHz settings above once it works.
-CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+# esp32-quake (Sunton 8048S050): 120 MHz since the bounce buffer display driver
+# (measured at 80 MHz: 29-42 fps in the demo).
+CONFIG_ESPTOOLPY_FLASHFREQ_120M=y
+CONFIG_SPI_FLASH_HPM_ENA=y
+CONFIG_SPI_FLASH_HPM_DC_DISABLE=y
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
@@ -29,7 +31,7 @@ CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
 CONFIG_SPIRAM=y
 CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_IDF_EXPERIMENTAL_FEATURES=y
-CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_SPEED_120M=y
 CONFIG_SPIRAM_USE_MALLOC=y
 CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y
 CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096
