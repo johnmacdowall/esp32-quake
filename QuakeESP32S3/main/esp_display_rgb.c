@@ -34,7 +34,19 @@
 #error "RGB_PANEL_SCALE too large for the panel"
 #endif
 
+#ifndef RGB_PANEL_FILL
+#define RGB_PANEL_FILL  0
+#endif
+#if RGB_PANEL_FILL
+// Full screen: 320 -> 800 columns (x2.5: pixels repeated 3, 2, 3, 2... times),
+// 240 -> 480 rows (x2). The image is 25% wider than Quake's 4:3.
+#if RGB_PANEL_SCALE != 2 || LCD_WIDTH * 5 / 2 != RGB_PANEL_WIDTH || LCD_HEIGHT * 2 != RGB_PANEL_HEIGHT
+#error "RGB_PANEL_FILL needs RGB_PANEL_SCALE 2 and an 800x480 panel"
+#endif
+#define OUT_WIDTH       RGB_PANEL_WIDTH
+#else
 #define OUT_WIDTH       (LCD_WIDTH * RGB_PANEL_SCALE)
+#endif
 #define OUT_HEIGHT      (LCD_HEIGHT * RGB_PANEL_SCALE)
 #define OUT_X           ((RGB_PANEL_WIDTH - OUT_WIDTH) / 2)
 #define OUT_Y           ((RGB_PANEL_HEIGHT - OUT_HEIGHT) / 2)
@@ -81,7 +93,23 @@ void displaySendPixels(const uint16_t *data, size_t numPixels, bool last)
     {
         const uint16_t *src = data + l * LCD_WIDTH;
         uint16_t *row = frameBuffer + (firstRow + l * RGB_PANEL_SCALE) * RGB_PANEL_WIDTH + OUT_X;
-#if RGB_PANEL_SCALE == 2
+#if RGB_PANEL_FILL
+        // 4 source pixels a b c d -> 10 output pixels a a a b b c c c d d, as five
+        // 32-bit writes (low half = left pixel)
+        uint32_t *dst = (uint32_t*) row;
+        for (int x = 0; x < LCD_WIDTH; x += 4, dst += 5)
+        {
+            uint32_t a = __builtin_bswap16(src[x]);
+            uint32_t b = __builtin_bswap16(src[x + 1]);
+            uint32_t c = __builtin_bswap16(src[x + 2]);
+            uint32_t d = __builtin_bswap16(src[x + 3]);
+            dst[0] = a | (a << 16);
+            dst[1] = a | (b << 16);
+            dst[2] = b | (c << 16);
+            dst[3] = c | (c << 16);
+            dst[4] = d | (d << 16);
+        }
+#elif RGB_PANEL_SCALE == 2
         // each pixel twice, as one 32-bit write (OUT_X is even: aligned)
         uint32_t *dst = (uint32_t*) row;
         for (int x = 0; x < LCD_WIDTH; x++)
