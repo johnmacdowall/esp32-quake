@@ -307,16 +307,17 @@
 // microSD on SPI, CH340 USB-UART bridge on UART0. See esp_display_rgb.c and
 // esp_board_sunton.c. Pin map verified with the esp32-quake bring-up test.
 //
-// Quake's 320x240 image is stretched to the full 800x480 (RGB_PANEL_FILL), or
-// scaled by RGB_PANEL_SCALE and centered (2 -> 640x480 with black bars, 4:3).
+// Quake's 320x240 image is scaled by RGB_PANEL_SCALE and centered: 2 -> 640x480
+// with 80 pixel black bars (4:3, like the original). RGB_PANEL_FILL stretches it
+// to the full 800x480 instead.
 // Free GPIOs for buttons: 17, 18, 19, 20, 38 (43/44 are the serial console).
 // -----------------------------------------------------------------------------
 #define DISPLAY_CONTROLLER              DISPLAY_CONTROLLER_RGB
 #define RGB_PANEL_WIDTH                 800
 #define RGB_PANEL_HEIGHT                480
 #define RGB_PANEL_SCALE                 2       // 1: 320x240 in the middle (faster, tiny), 2: 640x480
-#define RGB_PANEL_FILL                  1       // 1: stretch to the full 800x480 (25% wider than 4:3),
-                                                // 0: 640x480 with black bars (original proportions)
+#define RGB_PANEL_FILL                  0       // 0: 640x480, black bars, original 4:3 (largest 4:3 that fits,
+                                                //    sharp 2x2 pixels, fastest); 1: stretch to 800x480
 #define RGB_PANEL_PCLK_HZ               (16 * 1000 * 1000)
 #define RGB_PANEL_HSYNC_PULSE           4
 #define RGB_PANEL_HSYNC_BACK_PORCH      8
