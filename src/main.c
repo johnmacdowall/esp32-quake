@@ -191,7 +191,7 @@ static void sd_test(void)
 
     sdmmc_host_t host = SDSPI_HOST_DEFAULT();
     host.slot = SPI2_HOST;
-    host.max_freq_khz = 20000;   // drop to SDMMC_FREQ_DEFAULT if mount fails
+    host.max_freq_khz = 10000;   // drop to SDMMC_FREQ_DEFAULT if mount fails
 
     spi_bus_config_t bus = {
         .mosi_io_num = PIN_SD_MOSI,
