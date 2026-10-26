@@ -687,7 +687,7 @@ static esp_err_t handleRoot(httpd_req_t *req)
 static esp_err_t handleStatus(httpd_req_t *req)
 {
     const esp_app_desc_t *app = esp_app_get_description();
-    char buf[200], esc[80];
+    char buf[320], esc[80];
     htmlEscape(esc, sizeof(esc), app->version);
     snprintf(buf, sizeof(buf), "{\"version\":\"%s\",\"date\":\"%s %s\",\"mode\":\"%s\",\"confirmed\":%s,\"uploading\":%s,\"progress\":%d}",
         esc, app->date, app->time, mode == MODE_SETUP ? "setup" : "update", confirmedNow ? "true" : "false",
@@ -736,13 +736,15 @@ static esp_err_t handleSave(httpd_req_t *req)
     {
         return sendSetupPage(req, "Saving failed (NVS error).");
     }
-    char esc[100], buf[600];
+    char esc[100];
     htmlEscape(esc, sizeof(esc), newSsid);
-    snprintf(buf, sizeof(buf), "%s<h1>Saved</h1><p>The handheld restarts and joins <b>%s</b>. Its address appears on its screen; "
-        "if your router registers DHCP names, <b>http://" HOSTNAME ".lan/</b> works too.</p><p>You can leave " AP_SSID " now.</p></body></html>",
-        PAGE_HEAD, esc);
     httpd_resp_set_type(req, "text/html");
-    httpd_resp_sendstr(req, buf);
+    sendChunk(req, PAGE_HEAD);
+    sendChunk(req, "<h1>Saved</h1><p>The handheld restarts and joins <b>");
+    sendChunk(req, esc);
+    sendChunk(req, "</b>. Its address appears on its screen; if your router registers DHCP names, <b>http://" HOSTNAME
+        ".lan/</b> works too.</p><p>You can leave " AP_SSID " now.</p></body></html>");
+    httpd_resp_sendstr_chunk(req, NULL);
     setLine(8, "Saved: restarting...");
     drawScreen();
     restartSoon(true);
