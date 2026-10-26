@@ -34,6 +34,9 @@ void startDisplayRefresh(uint8_t bufferNumber, int updateAll);
 void setDisplayPen(int color, int background);
 void displayPrintln(bool update, const char * format, ...);
 void initGraphics(void);
+// esp32-quake: boot palette colors 0 = grey, 1 = black, 2 = white, 3 = blue (text-mode screens only)
+void displayFillRect(int x, int y, int w, int h, int color);
+void displayRefreshNow(void);
 static inline void waitForDisplayDMA(unsigned int y)
 {
     if (y >= SCREEN_HEIGHT)

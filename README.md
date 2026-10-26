@@ -15,6 +15,7 @@ Each folder is its own PlatformIO project: open the folder itself in VS Code.
 - [x] Flash + PSRAM at 120 MHz (passed a 15+ minute warm soak)
 - [ ] Sound: onboard NS4168 I2S amp on P6 "Speak" (I2S clock pin GPIO0 vs GPIO19 to confirm)
 - [ ] Buttons: MCP23017 I2C expander (P3: IO19 SDA, IO20 SCL; P4: 3.3V, GND)
+- [x] Wi-Fi firmware updates with automatic rollback (update mode)
 - [ ] 3D-printed case
 
 ## Running Quake
@@ -27,6 +28,26 @@ Each folder is its own PlatformIO project: open the folder itself in VS Code.
    With no controller the demo loop plays by itself.
 
 Game data is never committed to this repo (see `.gitignore`).
+
+## Wi-Fi updates
+Wi-Fi only runs in **update mode**, so the game keeps all its RAM. Enter it by pressing BOOT
+(or any pad button) during the short "Press BOOT..." prompt at power-on.
+
+- **Setup:** with no Wi-Fi stored, the board opens the network `QUAKE-SETUP`
+  (password `quakesetup`). Join it from a phone, open http://192.168.4.1/, enter the home
+  Wi-Fi details and choose an update password. Nothing secret is built into the firmware.
+- **Updating:** on the home network the screen shows the board's address. Open it in a
+  browser to upload `QuakeESP32S3/.pio/build/esp32-8048S050/firmware.bin`, or:
+  `curl -u quake:PASSWORD -H "Expect:" --data-binary @firmware.bin http://quake.lan/update`
+  A progress bar shows on the page and on the handheld.
+- **Safety net:** new firmware starts in update mode and confirms itself once its Wi-Fi is up.
+  If it crashes or is reset before that, the bootloader returns to the previous firmware.
+  After confirming, the game starts by itself after 15 s.
+- **quake.lan:** the board's DHCP host name is `quake`; with pfSense's "Register DHCP leases
+  in the DNS Resolver" on, http://quake.lan/ reaches it.
+- Uploads are checked: only a Quake `firmware.bin` for this project is accepted.
+- The first firmware with Wi-Fi updates changes the partition table: flash it over USB
+  (delete `sdkconfig.esp32-8048S050`, Full Clean, Upload). Savegames start over once.
 
 ## Board notes
 | Function | GPIO |

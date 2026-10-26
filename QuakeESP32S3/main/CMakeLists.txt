@@ -24,6 +24,7 @@ idf_component_register(
         esp_board_xiao.c
         esp_board_sunton.c
         esp_mcp23017.c
+        esp_update.c
         esp_parallel.c
         esp_printf.c
     INCLUDE_DIRS
@@ -33,6 +34,12 @@ idf_component_register(
     REQUIRES
         esp_driver_spi
         esp_lcd
+        esp_wifi
+        esp_netif
+        esp_event
+        esp_http_server
+        app_update
+        esp_app_format
         esp_mm
         esp_driver_gpio
         esp_driver_i2c

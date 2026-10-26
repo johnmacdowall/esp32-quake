@@ -84,6 +84,11 @@ void boardInputInit(void)
     mcp23017Start(MCP23017_I2C_SDA, MCP23017_I2C_SCL, MCP23017_I2C_ADDRESS, MCP23017_I2C_HZ);
 }
 
+bool boardAnyButtonPressed(void)
+{
+    return mcp23017GetPressed() != 0;
+}
+
 static void changeVolume(float delta)
 {
     float v = Cvar_VariableValue("volume") + delta;

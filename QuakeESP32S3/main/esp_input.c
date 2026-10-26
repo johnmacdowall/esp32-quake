@@ -163,6 +163,11 @@ __attribute__((weak)) uint32_t boardGetGamepadButtons(void)
     return 0;
 }
 
+__attribute__((weak)) bool boardAnyButtonPressed(void)
+{
+    return false;
+}
+
 void inputPushKey(int key, bool down)
 {
     if (!key)

@@ -166,6 +166,29 @@ static void displayPutChar(char c, int x, int y)
     }
 }
 
+// esp32-quake: text-mode screens outside the game (Wi-Fi update mode)
+void displayFillRect(int x, int y, int w, int h, int color)
+{
+    for (int yy = y; yy < y + h; yy++)
+    {
+        for (int xx = x; xx < x + w; xx++)
+        {
+            setPixel(xx, yy, color);
+        }
+    }
+}
+
+void displayRefreshNow(void)
+{
+    while (displayData.dmaBusy)
+    {
+    }
+    startDisplayRefresh(displayData.workingBuffer, 1);
+    while (displayData.dmaBusy)
+    {
+    }
+}
+
 void setDisplayPen(int color, int background)
 {
     penColor = color;

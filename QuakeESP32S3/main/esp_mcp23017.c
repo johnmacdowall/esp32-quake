@@ -118,6 +118,12 @@ static void pollTask(void *arg)
 
 void mcp23017Start(int sdaPin, int sclPin, uint8_t address, uint32_t clockHz)
 {
+    static bool started;
+    if (started)
+    {
+        return;     // already running (update mode check at boot, then the game)
+    }
+    started = true;
 #if SOC_USB_SERIAL_JTAG_SUPPORTED
     // GPIO19/20 are the native USB pins: the USB PHY pads must be released
     // before they can carry I2C (the console uses the CH340 on UART0).

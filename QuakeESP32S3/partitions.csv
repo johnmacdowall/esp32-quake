@@ -1,6 +1,9 @@
+# esp32-quake: two 3 MB firmware slots for Wi-Fi updates (with rollback).
 # Name,     Type, SubType,  Offset,   Size,     Flags
 nvs,        data, nvs,      0x9000,   0x6000,
-phy_init,   data, phy,      0xf000,   0x1000,
-factory,    app,  factory,  0x10000,  0x300000,
-# Savegames and settings (9 x 64 kB, see nvmData_t in quakedef.h)
-quakenvm,   data, 0x40,     ,         0x90000,
+otadata,    data, ota,      0xf000,   0x2000,
+phy_init,   data, phy,      0x11000,  0x1000,
+ota_0,      app,  ota_0,    0x20000,  0x300000,
+ota_1,      app,  ota_1,    0x320000, 0x300000,
+# Savegames and settings (9 x 64 kB, see nvmData_t in quakedef.h), found by name
+quakenvm,   data, 0x40,     0x620000, 0x90000,

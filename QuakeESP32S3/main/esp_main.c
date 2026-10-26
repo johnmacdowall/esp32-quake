@@ -38,6 +38,7 @@
 #include "driver/usb_serial_jtag.h"
 #endif
 #include "board_config.h"
+#include "esp_update.h"
 
 #define GAME_TASK_STACK_SIZE    (40 * 1024)
 #define GAME_TASK_PRIORITY      5
@@ -320,6 +321,11 @@ void app_main(void)
     displayPrintln(1, "PSRAM: %u kB free", (unsigned) (heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024));
     displayPrintln(1, "Internal RAM: %u kB free", (unsigned) (heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024));
     displayPrintln(1, "Memzone size %u bytes.", (unsigned) getStaticZoneSize());
+    // esp32-quake: Wi-Fi update mode (before the SD card: it works without one)
+    if (updateModeRequested())
+    {
+        updateModeRun();        // does not return
+    }
     //
     displayPrintln(1, "Mounting SD card...");
     esp_err_t ret = mountSdCard();
