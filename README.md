@@ -11,8 +11,10 @@ Each folder is its own PlatformIO project: open the folder itself in VS Code.
 
 ## Status
 - [x] Board bring-up: display, PSRAM, microSD
-- [ ] Quake port: first boot on the 8048S050
-- [ ] Button input PCB
+- [x] Quake port running on the 8048S050: 640x480 (4:3, black bars), stable, no tearing
+- [x] Flash + PSRAM at 120 MHz (passed a 15+ minute warm soak)
+- [ ] Sound: onboard NS4168 I2S amp on P6 "Speak" (I2S clock pin GPIO0 vs GPIO19 to confirm)
+- [ ] Buttons: MCP23017 I2C expander (P3: IO19 SDA, IO20 SCL; P4: 3.3V, GND)
 - [ ] 3D-printed case
 
 ## Running Quake
@@ -38,7 +40,25 @@ Game data is never committed to this repo (see `.gitignore`).
 | Serial console (CH340) | 43 / 44 |
 | Free for buttons | 17, 18, 19, 20, 38 |
 
-Measured: full 800x480 frame write to PSRAM ~26 ms; SD (SPI, 10 MHz) ~480 KB/s.
+Board revision: V1.3 (printed next to the microSD slot). Speaker amplifier: NS4168 (U4).
+Connectors are 1.25 mm pitch (Molex PicoBlade / "MX1.25").
+
+## Performance (shareware demo loop, fps printed once a second)
+| Configuration | fps |
+|---|---|
+| PSRAM frame buffer, 80 MHz | 22-27 (picture shifted / tore) |
+| Bounce buffers + triple-buffered 320x240 images, 80 MHz | 29-42 |
+| Same, flash + PSRAM at 120 MHz | 33-48 (about +15%) |
+
+Other measurements: SD card (SPI, 20 MHz) mounts; ~480 KB/s at 10 MHz in the bring-up test.
+
+## Display driver notes (QuakeESP32S3/main/esp_display_rgb.c)
+- No 800x480 frame buffer. The LCD runs in bounce buffer mode: two 8-line buffers in
+  internal RAM, refilled in the LCD interrupt by scaling the current 320x240 image (PSRAM).
+- Three 320x240 images rotate: the game never draws into the one on screen (no tearing).
+- `CONFIG_LCD_RGB_RESTART_IN_VSYNC` must stay off: in bounce buffer mode it makes the
+  picture jump vertically.
+- Changing `sdkconfig.defaults` needs `sdkconfig.esp32-8048S050` deleted + Full Clean.
 
 ## License
 `QuakeESP32S3/` is GPL (see `QuakeESP32S3/LICENSE`); the upstream commit it is based on is in
