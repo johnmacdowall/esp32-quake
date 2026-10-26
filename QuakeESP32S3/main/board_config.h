@@ -357,8 +357,41 @@
 #define AUDIO_PIN_DOUT                  -1
 #define AUDIO_PDM_PIN_CLK               -1
 
-// Until the button PCB exists: BOOT (GPIO0) is menu / escape; play with a
-// Bluetooth LE gamepad or keyboard.
+// Button pad: MCP23017 I2C GPIO expander (esp_mcp23017.c, esp_board_sunton.c).
+//   socket P3: IO19 -> SDA (pin 13), IO20 -> SCL (pin 12); IO17/IO18 not connected
+//   socket P4: 3.3V -> VDD (pin 9) and RESET (pin 18), GND -> VSS (pin 10) and A0-A2 (15-17)
+//   4.7k pull-ups from SDA and SCL to 3.3V. Each button: expander pin -> button -> GND.
+// The chip may be missing (or plugged in later): the game runs without it.
+// BOOT (GPIO0) stays menu / escape; Bluetooth LE gamepads and keyboards also work.
+#define BUTTON_PAD_MCP23017             1
+#define MCP23017_I2C_SDA                19
+#define MCP23017_I2C_SCL                20
+#define MCP23017_I2C_ADDRESS            0x20    // A0, A1, A2 to GND
+#define MCP23017_I2C_HZ                 400000
+// What each expander pin does, GPA0..GPA7 (pins 21-28) then GPB0..GPB7 (pins 1-8).
+// Names: BTN_UP/DOWN (move forward/back), BTN_LEFT/RIGHT (turn), BTN_FIRE, BTN_JUMP,
+// BTN_WEAPON (next weapon), BTN_MENU, BTN_STRAFE_LEFT/RIGHT, BTN_RUN, BTN_LOOK_UP/DOWN,
+// BTN_SWIM_DOWN, BTN_SCORES, BTN_CONSOLE, BTN_VOLUME_UP/DOWN, BTN_NONE.
+// In menus: FIRE and JUMP = select, MENU and SWIM_DOWN = back, arrows navigate.
+#define MCP23017_BUTTON_MAP \
+{ \
+    BTN_UP,             /* GPA0, pin 21 */ \
+    BTN_DOWN,           /* GPA1, pin 22 */ \
+    BTN_LEFT,           /* GPA2, pin 23 */ \
+    BTN_RIGHT,          /* GPA3, pin 24 */ \
+    BTN_FIRE,           /* GPA4, pin 25 */ \
+    BTN_JUMP,           /* GPA5, pin 26 */ \
+    BTN_WEAPON,         /* GPA6, pin 27 */ \
+    BTN_MENU,           /* GPA7, pin 28 */ \
+    BTN_STRAFE_LEFT,    /* GPB0, pin 1  */ \
+    BTN_STRAFE_RIGHT,   /* GPB1, pin 2  */ \
+    BTN_RUN,            /* GPB2, pin 3  */ \
+    BTN_LOOK_UP,        /* GPB3, pin 4  */ \
+    BTN_LOOK_DOWN,      /* GPB4, pin 5  */ \
+    BTN_SWIM_DOWN,      /* GPB5, pin 6  */ \
+    BTN_VOLUME_UP,      /* GPB6, pin 7  */ \
+    BTN_VOLUME_DOWN,    /* GPB7, pin 8  */ \
+}
 #define BUTTON_PIN_UP                   -1
 #define BUTTON_PIN_DOWN                 -1
 #define BUTTON_PIN_LEFT                 -1

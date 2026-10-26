@@ -23,6 +23,7 @@ idf_component_register(
         esp_board_m9.c
         esp_board_xiao.c
         esp_board_sunton.c
+        esp_mcp23017.c
         esp_parallel.c
         esp_printf.c
     INCLUDE_DIRS

@@ -158,6 +158,11 @@ __attribute__((weak)) void boardTakeLook(float *dx, float *dy)
     *dx = *dy = 0;
 }
 
+__attribute__((weak)) uint32_t boardGetGamepadButtons(void)
+{
+    return 0;
+}
+
 void inputPushKey(int key, bool down)
 {
     if (!key)
@@ -512,7 +517,7 @@ void inputHidClosed(void)
 // ---------------------------------------------------------------------------
 static uint32_t getVirtualGamepadButtons(bool inMenu)
 {
-    uint32_t gp = hidGamepadButtons | touchGetButtons();
+    uint32_t gp = hidGamepadButtons | touchGetButtons() | boardGetGamepadButtons();
     for (int i = 0; i < GP_NUM_BUTTONS; i++)
     {
         if (gpioButtons[i] >= 0 && !gpio_get_level(gpioButtons[i]))

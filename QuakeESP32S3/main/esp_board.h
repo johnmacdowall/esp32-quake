@@ -35,4 +35,8 @@ int boardTouchRead(boardTouchPoint_t *points);
 void boardInputInit(void);
 // Look movement since the last call, in touch pixel units
 void boardTakeLook(float *dx, float *dy);
+// Virtual gamepad buttons (1 << GP_xxx, see esp_input.h) pressed on board specific
+// input devices (esp32-quake: MCP23017 button pad). Called by the game task every
+// frame, so it may also change game settings. Optional: the default returns 0.
+uint32_t boardGetGamepadButtons(void);
 #endif
