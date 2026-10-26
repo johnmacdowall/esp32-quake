@@ -167,6 +167,64 @@ static esp_err_t mountSdCard(void)
     return ret;
 }
 
+// ---------------------------------------------------------------------------
+// esp32-quake: long-run statistics. Every STATS_SUMMARY_SECONDS one "STATS" line
+// sums up the last period (fps of the 5 s heartbeat windows, longest frame, PAK
+// cache misses, free memory) plus totals since boot, so an overnight run fits
+// in the serial monitor's scrollback.
+// ---------------------------------------------------------------------------
+#define STATS_HEARTBEAT_SECONDS     5.0f
+#define STATS_SUMMARY_SECONDS       60
+
+typedef struct
+{
+    float minFps, maxFps;       // over the heartbeat windows
+    int frames;
+    float seconds;
+    float longestFrame;         // seconds (level loads included)
+} statsPeriod_t;
+
+static void statsReset(statsPeriod_t *p)
+{
+    p->minFps = 1e9f;
+    p->maxFps = 0;
+    p->frames = 0;
+    p->seconds = 0;
+    p->longestFrame = 0;
+}
+
+static void statsAddWindow(statsPeriod_t *p, int frames, float seconds)
+{
+    float fps = frames / seconds;
+    p->minFps = fps < p->minFps ? fps : p->minFps;
+    p->maxFps = fps > p->maxFps ? fps : p->maxFps;
+    p->frames += frames;
+    p->seconds += seconds;
+}
+
+// the port's printf has no floating point: values are printed as tenths
+#define TENTHS(x)   ((int) ((x) * 10 + 0.5f))
+#define T_FMT       "%d.%d"
+#define T_ARG(x)    TENTHS(x) / 10, TENTHS(x) % 10
+
+static void statsPrintSummary(const statsPeriod_t *period, const statsPeriod_t *total, uint32_t periodMisses)
+{
+    unsigned up = (unsigned) (esp_timer_get_time() / 1000000);
+    float avg = period->seconds > 0 ? period->frames / period->seconds : 0;
+    float totalAvg = total->seconds > 0 ? total->frames / total->seconds : 0;
+    printf("STATS up %u:%02u:%02u | fps avg " T_FMT " min " T_FMT " max " T_FMT ", longest frame %d ms | "
+        "since boot: avg " T_FMT " min " T_FMT " max " T_FMT " | PAK misses +%u (%u) | "
+        "internal RAM %u kB (low %u) | PSRAM %u kB (low %u)\n",
+        up / 3600, up / 60 % 60, up % 60,
+        T_ARG(avg), T_ARG(period->minFps), T_ARG(period->maxFps), (int) (period->longestFrame * 1000),
+        T_ARG(totalAvg), T_ARG(total->minFps), T_ARG(total->maxFps),
+        (unsigned) periodMisses, (unsigned) extMemGetCacheMisses(),
+        (unsigned) (heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+        (unsigned) (heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024),
+        (unsigned) (heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024),
+        (unsigned) (heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM) / 1024));
+}
+
 static void gameTask(void *arg)
 {
     (void) arg;
@@ -178,19 +236,48 @@ static void gameTask(void *arg)
     oldtime = Sys_FloatTime() - 0.1f;
     float statsTime = oldtime;
     int statsFrames = host_framecount;
+    statsPeriod_t period, total;
+    statsReset(&period);
+    statsReset(&total);
+    int windows = 0;
+    uint32_t periodMissesStart = extMemGetCacheMisses();
+    float lastFrameTime = Sys_FloatTime();
     while (1)
     {
-        if (Sys_FloatTime() - statsTime >= 5.0f)
+        if (Sys_FloatTime() - statsTime >= STATS_HEARTBEAT_SECONDS)
         {
             // heartbeat on the serial console
             float now = Sys_FloatTime();
-            printf("fps: %d.%d, PAK cache misses: %u\n", (int) ((host_framecount - statsFrames) / (now - statsTime)),
-                (int) (10 * (host_framecount - statsFrames) / (now - statsTime)) % 10, (unsigned) extMemGetCacheMisses());
+            int frames = host_framecount - statsFrames;
+            float seconds = now - statsTime;
+            printf("fps: %d.%d, PAK cache misses: %u\n", (int) (frames / seconds),
+                (int) (10 * frames / seconds) % 10, (unsigned) extMemGetCacheMisses());
+            if (windows > 0)    // the first window includes the start-up level load
+            {
+                statsAddWindow(&period, frames, seconds);
+                statsAddWindow(&total, frames, seconds);
+            }
+            windows++;
+            if (windows > 1 && (windows - 1) % (int) (STATS_SUMMARY_SECONDS / STATS_HEARTBEAT_SECONDS) == 0)
+            {
+                statsPrintSummary(&period, &total, extMemGetCacheMisses() - periodMissesStart);
+                periodMissesStart = extMemGetCacheMisses();
+                statsReset(&period);
+            }
             statsTime = now;
             statsFrames = host_framecount;
         }
         // find time spent rendering last frame
         newtime = Sys_FloatTime();
+        if (newtime - lastFrameTime > period.longestFrame)
+        {
+            period.longestFrame = newtime - lastFrameTime;
+            if (period.longestFrame > total.longestFrame)
+            {
+                total.longestFrame = period.longestFrame;
+            }
+        }
+        lastFrameTime = newtime;
         time = newtime - oldtime;
         if (time > sys_ticrate * 2)
             oldtime = newtime;
@@ -210,6 +297,15 @@ void app_main(void)
     }
     vTaskDelay(pdMS_TO_TICKS(500));
 #endif
+    // why the previous run ended (overnight tests: a crash shows up here)
+    static const char *const resetReasons[] =
+    {
+        "unknown", "power-on", "external pin", "software restart", "crash (exception/panic)",
+        "interrupt watchdog", "task watchdog", "other watchdog", "deep sleep", "brownout (power dip)", "SDIO",
+        "USB", "JTAG", "eFuse error", "power glitch", "CPU lockup",
+    };
+    esp_reset_reason_t reason = esp_reset_reason();
+    printf("Reset reason: %s\n", (unsigned) reason < sizeof(resetReasons) / sizeof(resetReasons[0]) ? resetReasons[reason] : "?");
     boardInit();
     displayInit();
     initGraphics();
