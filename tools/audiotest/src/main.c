@@ -4,12 +4,15 @@
 // GPIO17 and its word select (LRCLK) on GPIO18. Its bit clock (BCLK) is on GPIO0
 // on V1.1 boards and GPIO19 on V1.0; V1.3 is undocumented. This test plays:
 //
-//   A: BCLK on GPIO0  -> ONE long LOW tone
-//   B: BCLK on GPIO19 -> THREE short HIGH beeps
+//   A: BCLK on GPIO0  -> ONE long tone
+//   B: BCLK on GPIO19 -> THREE short beeps
 //
 // over and over, and prints which one is playing. Whichever you hear is the wiring.
+// Both use 2400 Hz, near a small buzzer's loudest frequency. Before each test the
+// other candidate pin is disconnected from I2S and held low: otherwise the clock
+// stays routed to the previous pin and both tests sound.
 // Unplug the button pad cable from P3 first: GPIO19 is its SDA line.
-// The volume is kept low: a small buzzer can be overdriven at full power.
+// The volume is kept moderate: a small buzzer can be overdriven at full power.
 
 #include <math.h>
 #include <string.h>
@@ -17,17 +20,28 @@
 #include "freertos/task.h"
 #include "driver/i2s_std.h"
 #include "esp_log.h"
+#include "driver/gpio.h"
 
 #define SAMPLE_RATE     16000
 #define PIN_DOUT        17
 #define PIN_WS          18
-#define AMPLITUDE       0.15f       // 15% of full scale
+#define AMPLITUDE       0.25f       // 25% of full scale (about 50 mW into a 14 ohm buzzer)
 #define CHUNK_FRAMES    256
 
 static const char *TAG = "audiotest";
 
-static void playTones(int bclkPin, float freq, int beeps, int beepMs, int gapMs)
+// disconnect a pin from any peripheral and hold it low
+static void holdLow(int pin)
 {
+    gpio_reset_pin(pin);
+    gpio_set_direction(pin, GPIO_MODE_OUTPUT);
+    gpio_set_level(pin, 0);
+}
+
+static void playTones(int bclkPin, int otherPin, float freq, int beeps, int beepMs, int gapMs)
+{
+    holdLow(otherPin);
+    gpio_reset_pin(bclkPin);
     i2s_chan_handle_t tx;
     i2s_chan_config_t chanCfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
     chanCfg.auto_clear = true;          // silence when no data
@@ -82,18 +96,19 @@ static void playTones(int bclkPin, float freq, int beeps, int beepMs, int gapMs)
     }
     i2s_channel_disable(tx);
     i2s_del_channel(tx);
+    holdLow(bclkPin);
 }
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "NS4168 bit clock test: A = BCLK GPIO0 (one LOW tone), B = BCLK GPIO19 (three HIGH beeps)");
+    ESP_LOGI(TAG, "NS4168 bit clock test: A = BCLK GPIO0 (one long tone), B = BCLK GPIO19 (three short beeps)");
     while (1)
     {
-        printf("\n>>> A: bit clock on GPIO0  - ONE long LOW tone (500 Hz)\n");
-        playTones(0, 500.0f, 1, 1200, 0);
+        printf("\n>>> A: bit clock on GPIO0  - ONE long tone\n");
+        playTones(0, 19, 2400.0f, 1, 1200, 0);
         vTaskDelay(pdMS_TO_TICKS(1500));
-        printf(">>> B: bit clock on GPIO19 - THREE short HIGH beeps (2000 Hz)\n");
-        playTones(19, 2000.0f, 3, 200, 200);
+        printf(">>> B: bit clock on GPIO19 - THREE short beeps\n");
+        playTones(19, 0, 2400.0f, 3, 200, 200);
         vTaskDelay(pdMS_TO_TICKS(2500));
     }
 }
