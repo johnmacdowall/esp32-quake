@@ -30,6 +30,8 @@
 #include "freertos/semphr.h"
 #include "freertos/event_groups.h"
 #include "esp_attr.h"
+#include "esp_heap_caps.h"
+#include "sdkconfig.h"
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "esp_log.h"
@@ -51,6 +53,10 @@ void displayPrintln(bool update, const char *format, ...);
 void setDisplayPen(int color, int background);
 void displayFillRect(int x, int y, int w, int h, int color);
 void displayRefreshNow(void);
+
+#if CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM > 8
+#error "Wi-Fi buffer settings are stale (Wi-Fi would run out of internal RAM): delete sdkconfig.esp32-8048S050 next to platformio.ini, run Full Clean, and build again."
+#endif
 
 #define AP_SSID                 "QUAKE-SETUP"
 #define AP_PASSWORD             "quakesetup"
@@ -325,6 +331,36 @@ bool updateModeRequested(void)
 }
 
 // ---------------------------------------------------------------------------
+// Failures: never crash. Show what went wrong, then leave with a button press.
+// New firmware waiting for confirmation is not confirmed: the restart rolls back.
+// ---------------------------------------------------------------------------
+static void waitForPressThenPlay(void);
+
+static void failScreen(const char *what, esp_err_t err)
+{
+    ESP_LOGE(TAG, "%s failed: %s (internal RAM free %u, largest block %u)", what, esp_err_to_name(err),
+        (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL), (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+    setTitle("WI-FI COULD NOT START");
+    clearLines();
+    setLine(0, "%.38s", what);
+    setLine(1, "Error: %.31s", esp_err_to_name(err));
+    setLine(3, "Free internal RAM %u kB (largest %u)",
+        (unsigned) (heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+        (unsigned) (heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024));
+    if (confirmPending)
+    {
+        setLine(5, "New firmware not confirmed:");
+        setLine(6, "the previous one returns on restart.");
+    }
+    progress = -1;
+    mode = MODE_SETUP;      // shows the "button: play" hint
+    drawScreen();
+    waitForPressThenPlay();
+}
+
+#define WIFI_TRY(expr) do { esp_err_t e_ = (expr); if (e_ != ESP_OK) failScreen(#expr, e_); } while (0)
+
+// ---------------------------------------------------------------------------
 // Wi-Fi
 // ---------------------------------------------------------------------------
 static void onWifiEvent(void *arg, esp_event_base_t base, int32_t id, void *data)
@@ -364,10 +400,10 @@ static bool joinHomeWifi(void)
     snprintf((char*) cfg.sta.password, sizeof(cfg.sta.password), "%s", wifiPassword);
     cfg.sta.threshold.authmode = wifiPassword[0] ? WIFI_AUTH_WPA_PSK : WIFI_AUTH_OPEN;
     cfg.sta.pmf_cfg.capable = true;
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &cfg));
+    WIFI_TRY(esp_wifi_set_mode(WIFI_MODE_STA));
+    WIFI_TRY(esp_wifi_set_config(WIFI_IF_STA, &cfg));
     staActive = true;
-    ESP_ERROR_CHECK(esp_wifi_start());
+    WIFI_TRY(esp_wifi_start());
     EventBits_t bits = xEventGroupWaitBits(wifiEvents, BIT_GOT_IP, pdFALSE, pdTRUE, pdMS_TO_TICKS(STA_CONNECT_TIMEOUT_MS));
     if (bits & BIT_GOT_IP)
     {
@@ -457,9 +493,9 @@ static void startSetupAccessPoint(const char *reason)
     ap.ap.channel = AP_CHANNEL;
     ap.ap.authmode = WIFI_AUTH_WPA2_PSK;
     ap.ap.max_connection = 4;
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));     // STA side: network scan for the form
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap));
-    ESP_ERROR_CHECK(esp_wifi_start());
+    WIFI_TRY(esp_wifi_set_mode(WIFI_MODE_APSTA));     // STA side: network scan for the form
+    WIFI_TRY(esp_wifi_set_config(WIFI_IF_AP, &ap));
+    WIFI_TRY(esp_wifi_start());
     scanNetworks();
     mode = MODE_SETUP;
     setTitle("WI-FI SETUP");
@@ -1027,19 +1063,19 @@ void updateModeRun(void)
         nvs_flash_erase();
         err = nvs_flash_init();
     }
-    ESP_ERROR_CHECK(err);
+    WIFI_TRY(err);
     loadSettings();
 
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    WIFI_TRY(esp_netif_init());
+    WIFI_TRY(esp_event_loop_create_default());
     staNetif = esp_netif_create_default_wifi_sta();
     apNetif = esp_netif_create_default_wifi_ap();
     esp_netif_set_hostname(staNetif, HOSTNAME);         // DHCP option 12: quake.lan with pfSense lease registration
     wifi_init_config_t initCfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&initCfg));
-    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM)); // credentials live in our own NVS namespace
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, onWifiEvent, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, onWifiEvent, NULL));
+    WIFI_TRY(esp_wifi_init(&initCfg));
+    WIFI_TRY(esp_wifi_set_storage(WIFI_STORAGE_RAM)); // credentials live in our own NVS namespace
+    WIFI_TRY(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, onWifiEvent, NULL));
+    WIFI_TRY(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, onWifiEvent, NULL));
 
     if (haveWifi)
     {
@@ -1089,7 +1125,12 @@ void updateModeRun(void)
     touchActivity();
     drawScreen();
 
-    // leave with a new press of BOOT or a pad button; after a confirmed update, start the game by itself
+    waitForPressThenPlay();
+}
+
+// Leave with a new press of BOOT or a pad button; after a confirmed update, start the game by itself
+static void waitForPressThenPlay(void)
+{
     pressWatch_t w;
     watchStart(&w);
     while (1)
