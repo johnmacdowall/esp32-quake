@@ -11,6 +11,8 @@
 #define LCD_WIDTH   320
 #define LCD_HEIGHT  240
 void displayInit(void);
+// esp32-quake: frees internal RAM for Wi-Fi update mode (RGB panels; no-op elsewhere)
+void displayLowMemoryMode(void);
 // false if the display pins are not configured: nothing is sent then
 bool displayIsReady(void);
 // Sets the drawing window to the full width, lines [firstLine, firstLine + numLines), and starts RAM write.

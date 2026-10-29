@@ -54,6 +54,12 @@ void displayPrintln(bool update, const char *format, ...);
 void setDisplayPen(int color, int background);
 void displayFillRect(int x, int y, int w, int h, int color);
 void displayRefreshNow(void);
+void displayLowMemoryMode(void);
+
+// SPI panel boards have nothing to shrink
+__attribute__((weak)) void displayLowMemoryMode(void)
+{
+}
 
 #if CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM > 8
 #error "Wi-Fi buffer settings are stale (Wi-Fi would run out of internal RAM): delete sdkconfig.esp32-8048S050 next to platformio.ini, run Full Clean, and build again."
@@ -1055,6 +1061,8 @@ void updateModeRun(void)
     io.pin_bit_mask = 1ULL << PIN_BOOT;
     gpio_config(&io);
     boardInputInit();       // button pad, if any (safe to call twice)
+    // Wi-Fi needs internal RAM that the game's display buffers hold: shrink them
+    displayLowMemoryMode();
     screenLock = xSemaphoreCreateMutex();
     wifiEvents = xEventGroupCreate();
     setTitle(confirmPending ? "CHECKING NEW FIRMWARE" : "WI-FI UPDATE MODE");

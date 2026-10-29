@@ -100,11 +100,11 @@ CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
 # Buffers that must stay in internal RAM: keep them few (that option alone raises the
 # static RX buffers to 16 x 1.6 kB, which does not fit: esp_wifi_init ESP_ERR_NO_MEM).
-# Firmware uploads do not need the throughput of AMPDU aggregation.
+# Firmware uploads do not need the throughput of AMPDU aggregation. In update mode the
+# display also shrinks its internal buffers (esp_display_rgb.c, displayLowMemoryMode).
 CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6
 CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=16
-CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER=y
-CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=16
+# (TX buffers: ESP-IDF forces the static type when Wi-Fi uses PSRAM)
 CONFIG_ESP_WIFI_CACHE_TX_BUFFER_NUM=16
 CONFIG_ESP_WIFI_MGMT_SBUF_NUM=12
 # CONFIG_ESP_WIFI_AMPDU_RX_ENABLED is not set

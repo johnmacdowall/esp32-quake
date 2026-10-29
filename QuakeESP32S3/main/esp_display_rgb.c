@@ -33,6 +33,7 @@
 #if DISPLAY_CONTROLLER == DISPLAY_CONTROLLER_RGB
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "driver/gpio.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_rgb.h"
@@ -242,17 +243,8 @@ void displayWaitAll(void)
 {
 }
 
-void displayInit(void)
+static esp_err_t createPanel(int bounceLines)
 {
-    for (int i = 0; i < NUM_IMAGES; i++)
-    {
-        images[i] = heap_caps_calloc(IMAGE_PIXELS, sizeof(uint16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (!images[i])
-        {
-            ESP_LOGE(TAG, "no PSRAM for the screen images");
-            return;
-        }
-    }
     static const int dataPins[16] = RGB_PANEL_DATA_PINS;
     esp_lcd_rgb_panel_config_t cfg =
     {
@@ -273,7 +265,7 @@ void displayInit(void)
         .data_width = 16,
         .bits_per_pixel = 16,
         .num_fbs = 0,
-        .bounce_buffer_size_px = RGB_PANEL_WIDTH * RGB_PANEL_BOUNCE_LINES,
+        .bounce_buffer_size_px = RGB_PANEL_WIDTH * bounceLines,
         .hsync_gpio_num = RGB_PANEL_PIN_HSYNC,
         .vsync_gpio_num = RGB_PANEL_PIN_VSYNC,
         .de_gpio_num = RGB_PANEL_PIN_DE,
@@ -303,6 +295,21 @@ void displayInit(void)
     {
         err = esp_lcd_panel_init(panel);
     }
+    return err;
+}
+
+void displayInit(void)
+{
+    for (int i = 0; i < NUM_IMAGES; i++)
+    {
+        images[i] = heap_caps_calloc(IMAGE_PIXELS, sizeof(uint16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!images[i])
+        {
+            ESP_LOGE(TAG, "no PSRAM for the screen images");
+            return;
+        }
+    }
+    esp_err_t err = createPanel(RGB_PANEL_BOUNCE_LINES);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG, "RGB panel init failed: %s", esp_err_to_name(err));
@@ -322,5 +329,58 @@ void displayInit(void)
     ESP_LOGI(TAG, "%dx%d panel, game image %dx%d at (%d, %d), bounce buffers %d lines",
         RGB_PANEL_WIDTH, RGB_PANEL_HEIGHT, OUT_WIDTH, OUT_HEIGHT, OUT_X, OUT_Y, RGB_PANEL_BOUNCE_LINES);
     ready = true;
+}
+
+// ---------------------------------------------------------------------------
+// Low memory mode (Wi-Fi update mode, no game running): the panel is rebuilt with
+// small bounce buffers, freeing internal RAM for Wi-Fi. Its interrupt is created on
+// core 1, idle then, so Wi-Fi activity on core 0 can never delay a refill.
+// ---------------------------------------------------------------------------
+#define RGB_PANEL_BOUNCE_LINES_LOWMEM   2
+
+static SemaphoreHandle_t rebuildDone;
+static esp_err_t rebuildResult;
+
+static void rebuildTask(void *arg)
+{
+    (void) arg;
+    rebuildResult = esp_lcd_panel_del(panel);
+    panel = NULL;
+    if (rebuildResult == ESP_OK)
+    {
+        rebuildResult = createPanel(RGB_PANEL_BOUNCE_LINES_LOWMEM);
+    }
+    if (rebuildResult != ESP_OK)
+    {
+        // fall back to the normal buffers if the small ones cannot be set up
+        if (panel)
+        {
+            esp_lcd_panel_del(panel);
+            panel = NULL;
+        }
+        createPanel(RGB_PANEL_BOUNCE_LINES);
+    }
+    xSemaphoreGive(rebuildDone);
+    vTaskDelete(NULL);
+}
+
+void displayLowMemoryMode(void)
+{
+    if (!ready)
+    {
+        return;
+    }
+    size_t before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    rebuildDone = xSemaphoreCreateBinary();
+    if (!rebuildDone || xTaskCreatePinnedToCore(rebuildTask, "lcd rebuild", 3072, NULL, 5, NULL, 1) != pdPASS)
+    {
+        ESP_LOGW(TAG, "low memory mode: cannot start the rebuild task");
+        return;
+    }
+    xSemaphoreTake(rebuildDone, portMAX_DELAY);
+    vSemaphoreDelete(rebuildDone);
+    ESP_LOGI(TAG, "low memory mode (%d-line bounce buffers on core 1): %s, internal RAM %u -> %u bytes free",
+        RGB_PANEL_BOUNCE_LINES_LOWMEM, esp_err_to_name(rebuildResult), (unsigned) before,
+        (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
 }
 #endif // DISPLAY_CONTROLLER == DISPLAY_CONTROLLER_RGB
