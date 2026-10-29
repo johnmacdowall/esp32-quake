@@ -39,7 +39,10 @@ void boardTakeLook(float *dx, float *dy);
 // input devices (esp32-quake: MCP23017 button pad). Called by the game task every
 // frame, so it may also change game settings. Optional: the default returns 0.
 uint32_t boardGetGamepadButtons(void);
-// True while any board button is held (BOOT excluded), with no side effects: used
-// at boot and in Wi-Fi update mode, before the game runs. Optional: default false.
-bool boardAnyButtonPressed(void);
+// Board buttons currently held, one bit each (BOOT excluded), with no side effects:
+// used at boot and in Wi-Fi update mode, before the game runs. -1 when there is no
+// button pad or it is not answering. Optional: the default returns -1.
+int32_t boardPadButtons(void);
+// Name of pad button bit i for messages, e.g. "GPA0 (pin 21)". Optional.
+const char *boardPadButtonName(int i);
 #endif

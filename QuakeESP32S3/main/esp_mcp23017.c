@@ -45,6 +45,31 @@ uint16_t mcp23017GetPressed(void)
     return pressed;
 }
 
+const char *mcp23017PinName(int bit)
+{
+    static const char *const names[16] =
+    {
+        "GPA0 (pin 21)", "GPA1 (pin 22)", "GPA2 (pin 23)", "GPA3 (pin 24)",
+        "GPA4 (pin 25)", "GPA5 (pin 26)", "GPA6 (pin 27)", "GPA7 (pin 28)",
+        "GPB0 (pin 1)", "GPB1 (pin 2)", "GPB2 (pin 3)", "GPB3 (pin 4)",
+        "GPB4 (pin 5)", "GPB5 (pin 6)", "GPB6 (pin 7)", "GPB7 (pin 8)",
+    };
+    return bit >= 0 && bit < 16 ? names[bit] : "?";
+}
+
+// one log line per button change: makes checking the wiring easy
+static void logChanges(uint16_t before, uint16_t after)
+{
+    uint16_t changed = before ^ after;
+    for (int i = 0; i < 16; i++)
+    {
+        if (changed & (1 << i))
+        {
+            ESP_LOGI(TAG, "buttons: %s %s", mcp23017PinName(i), (after & (1 << i)) ? "down" : "up");
+        }
+    }
+}
+
 bool mcp23017IsPresent(void)
 {
     return present;
@@ -81,10 +106,17 @@ static void pollTask(void *arg)
     {
         if (!present)
         {
-            if (i2c_master_probe(bus, devAddress, I2C_TIMEOUT_MS) == ESP_OK && configure())
+            uint16_t first;
+            if (i2c_master_probe(bus, devAddress, I2C_TIMEOUT_MS) == ESP_OK && configure() && readPins(&first))
             {
-                present = true;
                 ESP_LOGI(TAG, "button expander found at 0x%02X", devAddress);
+                // no debouncing for the very first state: a button held at start is seen at once
+                logChanges(0, first);
+                pressed = first;
+                last = first;
+                present = true;
+                vTaskDelay(pdMS_TO_TICKS(POLL_MS));
+                continue;
             }
             else
             {
@@ -102,6 +134,7 @@ static void pollTask(void *arg)
         {
             // unplugged or bus error: release everything and probe again
             ESP_LOGW(TAG, "button expander stopped answering");
+            logChanges(pressed, 0);
             present = false;
             pressed = 0;
             last = 0;
@@ -110,7 +143,12 @@ static void pollTask(void *arg)
         }
         // debounce: a pin changes state after two identical reads in a row
         uint16_t stable = ~(pins ^ last);
-        pressed = (pressed & ~stable) | (pins & stable);
+        uint16_t now = (pressed & ~stable) | (pins & stable);
+        if (now != pressed)
+        {
+            logChanges(pressed, now);
+        }
+        pressed = now;
         last = pins;
         vTaskDelay(pdMS_TO_TICKS(POLL_MS));
     }

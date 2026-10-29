@@ -224,6 +224,67 @@ static void restartSoon(bool intoUpdateMode)
 }
 
 // ---------------------------------------------------------------------------
+// Buttons: only a new press counts (released, then pressed). A button held
+// from the start or stuck by a wiring fault never triggers anything.
+// Bits 0..15: pad buttons, bit 16: BOOT.
+// ---------------------------------------------------------------------------
+#define BOOT_BIT    (1u << 16)
+
+typedef struct
+{
+    uint32_t seenUp;        // buttons seen released since watching started
+    uint32_t down;          // last state
+    uint32_t valid;         // buttons that can be read now
+} pressWatch_t;
+
+static void watchStart(pressWatch_t *w)
+{
+    memset(w, 0, sizeof(*w));
+}
+
+static bool watchNewPress(pressWatch_t *w)
+{
+    int32_t pad = boardPadButtons();
+    uint32_t down = 0, valid = BOOT_BIT;
+    if (pad >= 0)
+    {
+        down = (uint32_t) pad & 0xFFFF;
+        valid |= 0xFFFF;
+    }
+    else
+    {
+        w->seenUp &= ~0xFFFFu;      // pad gone: forget its buttons
+    }
+    if (!gpio_get_level(PIN_BOOT))
+    {
+        down |= BOOT_BIT;
+    }
+    bool newPress = (down & w->seenUp & valid) != 0;
+    w->seenUp |= ~down & valid;
+    w->down = down;
+    w->valid = valid;
+    return newPress;
+}
+
+// Pad buttons down all along (held at power-on, or a wiring fault)
+static uint32_t watchStuck(const pressWatch_t *w)
+{
+    return w->down & ~w->seenUp & w->valid & 0xFFFF;
+}
+
+static void reportStuck(uint32_t stuck)
+{
+    for (int i = 0; i < 16; i++)
+    {
+        if (stuck & (1u << i))
+        {
+            ESP_LOGW(TAG, "pad button %s reads as held: ignored (wiring? button legs?)", boardPadButtonName(i));
+            displayPrintln(1, "Button %s held/stuck: ignored", boardPadButtonName(i));
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Boot-time decision
 // ---------------------------------------------------------------------------
 bool updateModeRequested(void)
@@ -248,20 +309,18 @@ bool updateModeRequested(void)
     gpio_config(&io);
     boardInputInit();       // button pad, if any (also called later by the game)
     displayPrintln(1, "Press BOOT or a pad button for Wi-Fi update");
+    pressWatch_t w;
+    watchStart(&w);
     int64_t end = esp_timer_get_time() + BOOT_WINDOW_MS * 1000LL;
     while (esp_timer_get_time() < end)
     {
-        if (!gpio_get_level(PIN_BOOT) || boardAnyButtonPressed())
+        if (watchNewPress(&w))
         {
-            // wait for the release, so the press does not reach the update screen
-            while (!gpio_get_level(PIN_BOOT) || boardAnyButtonPressed())
-            {
-                vTaskDelay(pdMS_TO_TICKS(20));
-            }
-            return true;
+            return true;    // update mode starts its own watch: this press does not leak into it
         }
         vTaskDelay(pdMS_TO_TICKS(20));
     }
+    reportStuck(watchStuck(&w));
     return false;
 }
 
@@ -1030,10 +1089,12 @@ void updateModeRun(void)
     touchActivity();
     drawScreen();
 
-    // leave with BOOT or any pad button; after a confirmed update, start the game by itself
+    // leave with a new press of BOOT or a pad button; after a confirmed update, start the game by itself
+    pressWatch_t w;
+    watchStart(&w);
     while (1)
     {
-        if (!uploading && (!gpio_get_level(PIN_BOOT) || boardAnyButtonPressed()))
+        if (watchNewPress(&w) && !uploading)
         {
             setLine(8, "Starting the game...");
             drawScreen();

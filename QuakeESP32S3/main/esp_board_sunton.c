@@ -84,9 +84,14 @@ void boardInputInit(void)
     mcp23017Start(MCP23017_I2C_SDA, MCP23017_I2C_SCL, MCP23017_I2C_ADDRESS, MCP23017_I2C_HZ);
 }
 
-bool boardAnyButtonPressed(void)
+int32_t boardPadButtons(void)
 {
-    return mcp23017GetPressed() != 0;
+    return mcp23017IsPresent() ? (int32_t) mcp23017GetPressed() : -1;
+}
+
+const char *boardPadButtonName(int i)
+{
+    return mcp23017PinName(i);
 }
 
 static void changeVolume(float delta)

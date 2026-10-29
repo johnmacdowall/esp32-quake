@@ -18,6 +18,8 @@
 void mcp23017Start(int sdaPin, int sclPin, uint8_t address, uint32_t clockHz);
 // Debounced pressed buttons: bit 0..7 = GPA0..GPA7, bit 8..15 = GPB0..GPB7
 uint16_t mcp23017GetPressed(void);
-// True once the chip has answered
+// True once the chip has answered and its pins have been read
 bool mcp23017IsPresent(void);
+// "GPA0 (pin 21)" ... "GPB7 (pin 8)" for bit 0..15 (DIP/SOIC pin numbers)
+const char *mcp23017PinName(int bit);
 #endif
