@@ -5,6 +5,7 @@ Quake on the Sunton ESP32-8048S050 (ESP32-S3 N16R8, 5" 800x480 RGB IPS panel).
 | Folder | What it is |
 |---|---|
 | `bringup/` | Board bring-up test: display color bars, PSRAM, microSD (passed) |
+| `tools/audiotest/` | Speaker test: finds the amplifier's bit-clock pin (GPIO0 or GPIO19) by ear |
 | `QuakeESP32S3/` | The Quake port: [recrof/Quake-ESP32S3](https://github.com/recrof/Quake-ESP32S3) (MG24Quake by Nicola Wrachien, based on id Software's WinQuake) plus an 800x480 RGB panel driver for this board |
 
 Each folder is its own PlatformIO project: open the folder itself in VS Code.
