@@ -4,7 +4,8 @@
  *
  * - Setup: with no Wi-Fi details stored (or if the home network cannot be joined),
  *   the board opens the access point QUAKE-SETUP (password quakesetup) and serves a
- *   form at http://192.168.4.1/ for the home Wi-Fi details and an update password.
+ *   form at http://192.168.20.1/ for the home Wi-Fi details and an update password
+ *   (192.168.20.x: 192.168.4.x is the ESP-IDF default, already used by other gadgets).
  *   Nothing secret is built into the firmware: it is all stored in NVS.
  * - Updating: on the home network the board is named "quake" (DHCP host name, so a
  *   router registering DHCP leases in DNS makes http://quake.lan/ work) and shows
@@ -61,6 +62,11 @@ void displayRefreshNow(void);
 #define AP_SSID                 "QUAKE-SETUP"
 #define AP_PASSWORD             "quakesetup"
 #define AP_CHANNEL              6
+#define AP_IP_A                 192         // setup network 192.168.20.0/24
+#define AP_IP_B                 168
+#define AP_IP_C                 20
+#define AP_IP_D                 1
+#define AP_IP_TEXT              "192.168.20.1"
 #define HOSTNAME                "quake"
 #define NVS_NAMESPACE           "update"
 #define PIN_BOOT                0
@@ -340,7 +346,7 @@ static void failScreen(const char *what, esp_err_t err)
 {
     ESP_LOGE(TAG, "%s failed: %s (internal RAM free %u, largest block %u)", what, esp_err_to_name(err),
         (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL), (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
-    setTitle("WI-FI COULD NOT START");
+    setTitle("UPDATE MODE ERROR");
     clearLines();
     setLine(0, "%.38s", what);
     setLine(1, "Error: %.31s", esp_err_to_name(err));
@@ -504,11 +510,11 @@ static void startSetupAccessPoint(const char *reason)
     {
         setLine(0, "%s", reason);
     }
-    setLine(1, "On your phone, join the Wi-Fi network");
+    setLine(1, "Join the Wi-Fi network");
     setLine(2, "  " AP_SSID);
     setLine(3, "  password: " AP_PASSWORD);
     setLine(5, "then open in a browser:");
-    setLine(6, "  http://192.168.4.1/");
+    setLine(6, "  http://" AP_IP_TEXT "/");
     drawScreen();
 }
 
@@ -875,7 +881,7 @@ static esp_err_t handleUpdate(httpd_req_t *req)
     {
         return sendError(req, "413 Payload Too Large", "Firmware larger than the update slot\n");
     }
-    char *buf = malloc(UPLOAD_CHUNK);
+    char *buf = heap_caps_malloc(UPLOAD_CHUNK, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!buf)
     {
         return sendError(req, "500 Internal Server Error", "Out of memory\n");
@@ -1013,17 +1019,16 @@ static void startWebServer(void)
 {
     httpd_handle_t server = NULL;
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
-    cfg.stack_size = 8192;
+    // the stack must stay in internal RAM: this task writes the update to flash
+    cfg.stack_size = 6144;
+    cfg.max_open_sockets = 4;
     cfg.max_uri_handlers = 10;
     cfg.recv_wait_timeout = 15;
     cfg.send_wait_timeout = 15;
     cfg.lru_purge_enable = true;
-    if (httpd_start(&server, &cfg) != ESP_OK)
-    {
-        setLine(8, "Web server failed to start");
-        drawScreen();
-        return;
-    }
+    ESP_LOGI(TAG, "starting web server: internal RAM free %u, largest block %u",
+        (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL), (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+    WIFI_TRY(httpd_start(&server, &cfg));
     static const httpd_uri_t uris[] =
     {
         { .uri = "/", .method = HTTP_GET, .handler = handleRoot },
@@ -1070,6 +1075,14 @@ void updateModeRun(void)
     WIFI_TRY(esp_event_loop_create_default());
     staNetif = esp_netif_create_default_wifi_sta();
     apNetif = esp_netif_create_default_wifi_ap();
+    // setup network on 192.168.20.x instead of the default 192.168.4.x
+    esp_netif_ip_info_t apIp = { 0 };
+    esp_netif_set_ip4_addr(&apIp.ip, AP_IP_A, AP_IP_B, AP_IP_C, AP_IP_D);
+    esp_netif_set_ip4_addr(&apIp.gw, AP_IP_A, AP_IP_B, AP_IP_C, AP_IP_D);
+    esp_netif_set_ip4_addr(&apIp.netmask, 255, 255, 255, 0);
+    esp_netif_dhcps_stop(apNetif);              // "already stopped" is fine
+    WIFI_TRY(esp_netif_set_ip_info(apNetif, &apIp));
+    WIFI_TRY(esp_netif_dhcps_start(apNetif));
     esp_netif_set_hostname(staNetif, HOSTNAME);         // DHCP option 12: quake.lan with pfSense lease registration
     wifi_init_config_t initCfg = WIFI_INIT_CONFIG_DEFAULT();
     WIFI_TRY(esp_wifi_init(&initCfg));

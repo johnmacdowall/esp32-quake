@@ -34,7 +34,7 @@ Wi-Fi only runs in **update mode**, so the game keeps all its RAM. Enter it by p
 (or any pad button) during the short "Press BOOT..." prompt at power-on.
 
 - **Setup:** with no Wi-Fi stored, the board opens the network `QUAKE-SETUP`
-  (password `quakesetup`). Join it from a phone, open http://192.168.4.1/, enter the home
+  (password `quakesetup`). Join it from a phone, open http://192.168.20.1/, enter the home
   Wi-Fi details and choose an update password. Nothing secret is built into the firmware.
 - **Updating:** on the home network the screen shows the board's address. Open it in a
   browser to upload `QuakeESP32S3/.pio/build/esp32-8048S050/firmware.bin`, or:
